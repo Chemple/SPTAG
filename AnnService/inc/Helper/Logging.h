@@ -4,6 +4,7 @@
 #ifndef _SPTAG_HELPER_LOGGING_H_
 #define _SPTAG_HELPER_LOGGING_H_
 
+#include <memory>
 #include <stdarg.h>
 #include <string.h>
 #include <stdio.h>

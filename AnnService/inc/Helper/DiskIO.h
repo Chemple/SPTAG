@@ -5,6 +5,7 @@
 #define _SPTAG_HELPER_DISKIO_H_
 
 #include <functional>
+#include <cstdint>
 #include <fstream>
 #include <string.h>
 #include <memory>

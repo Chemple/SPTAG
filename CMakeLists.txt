@@ -5,6 +5,8 @@ cmake_minimum_required (VERSION 3.12)
 
 project (SPTAGLib)
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
 function(CXX_COMPILER_DUMPVERSION _OUTPUT_VERSION)
   exec_program(${CMAKE_CXX_COMPILER}
     ARGS ${CMAKE_CXX_COMPILER_ARG1} -dumpversion
@@ -115,12 +117,12 @@ else()
     message (FATAL_ERROR "Could not find Boost >= 1.67!")
 endif()
 
-option(GPU "GPU" ON)
+option(GPU "GPU" OFF)
 option(LIBRARYONLY "LIBRARYONLY" OFF)
 
 add_subdirectory (ThirdParty/zstd/build/cmake)
 
 add_subdirectory (AnnService)
 add_subdirectory (Test)
-add_subdirectory (GPUSupport)
+# add_subdirectory (GPUSupport)
 add_subdirectory (Wrappers)
