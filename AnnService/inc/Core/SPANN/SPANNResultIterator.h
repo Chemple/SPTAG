@@ -10,7 +10,7 @@
 #include "inc/Core/SearchQuery.h"
 #include "inc/Core/ResultIterator.h"
 #include "inc/Core/Common/WorkSpace.h"
-#include "inc/Core/SPANN/IExtraSearcher.h"
+#include "inc/Core/SPANN/IExtraSearcher.cuh"
 
 namespace SPTAG
 {

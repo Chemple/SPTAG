@@ -1,14 +1,33 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the MIT License.
 
+find_package(CUDA)
+
+message (STATUS "Found cuda.")
+message (STATUS "Include Path:" ${CUDA_INCLUDE_DIRS})
+message (STATUS "Library Path:" ${CUDA_LIBRARIES})
+if(${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU")
+    set (CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS} -Xcompiler -fPIC -Xcompiler -fopenmp -std=c++14 -Xptxas -O3 --use_fast_math --disable-warnings -lineinfo
+    -gencode arch=compute_70,code=sm_70
+    -gencode arch=compute_75,code=sm_75
+    -gencode arch=compute_80,code=sm_80" )
+elseif(WIN32)
+    set (CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS} -Xcompiler /openmp -Xcompiler /std:c++14 -Xcompiler /Zc:__cplusplus -Xcompiler /FS --use_fast_math
+    -gencode arch=compute_70,code=sm_70
+    -gencode arch=compute_75,code=sm_75
+    -gencode arch=compute_80,code=sm_80" )
+endif()
+
+message (STATUS "CUDA_NVCC_FLAGS:" ${CUDA_NVCC_FLAGS})
+
 set(AnnService ${PROJECT_SOURCE_DIR}/AnnService)
 set(Zstd ${PROJECT_SOURCE_DIR}/ThirdParty/zstd)
 
 include_directories(${AnnService})
 include_directories(${Zstd}/lib)
 
-file(GLOB_RECURSE HDR_FILES ${AnnService}/inc/Core/*.h  ${AnnService}/inc/Helper/*.h)
-file(GLOB_RECURSE SRC_FILES ${AnnService}/src/Core/*.cpp ${AnnService}/src/Helper/*.cpp)
+file(GLOB_RECURSE HDR_FILES ${AnnService}/inc/Core/*.h ${AnnService}/inc/Core/*.cuh  ${AnnService}/inc/Helper/*.h)
+file(GLOB_RECURSE SRC_FILES ${AnnService}/src/Core/*.cpp ${AnnService}/src/Core/*.cu ${AnnService}/src/Helper/*.cpp)
 
 list(REMOVE_ITEM HDR_FILES
     ${AnnService}/inc/Core/Common/DistanceUtils.h
@@ -22,6 +41,15 @@ list(REMOVE_ITEM SRC_FILES
     ${AnnService}/src/Core/Common/SIMDUtils.cpp
     ${AnnService}/src/Core/Common/InstructionUtils.cpp
     )
+
+set_source_files_properties(${GPU_SRC_FILES} PROPERTIES CUDA_SOURCE_PROPERTY_FORMAT OBJ)
+if (${CMAKE_BUILD_TYPE} STREQUAL "Debug")
+    set(Definition -DGPUSPTAG -DDEBUG)
+else()
+    set(Definition -DGPUSPTAG)
+endif()
+
+include_directories(${CUDA_INCLUDE_DIRS})
 
 add_library (DistanceUtils STATIC 
     inc/Core/Common/DistanceUtils.h
@@ -38,9 +66,16 @@ if(${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU")
 endif()
 
 add_library (SPTAGLib SHARED ${SRC_FILES} ${HDR_FILES})
-target_link_libraries (SPTAGLib DistanceUtils libzstd_shared ${NUMA_LIBRARY})
+target_link_libraries (SPTAGLib DistanceUtils libzstd_shared ${NUMA_LIBRARY} ${CUDA_LIBRARIES})
+target_compile_definitions(SPTAGLib PRIVATE ${Definition})
+
 add_library (SPTAGLibStatic STATIC ${SRC_FILES} ${HDR_FILES})
-target_link_libraries (SPTAGLibStatic DistanceUtils libzstd_static ${NUMA_LIBRARY_STATIC})
+target_link_libraries (SPTAGLibStatic DistanceUtils libzstd_static ${NUMA_LIBRARY_STATIC} ${CUDA_LIBRARIES})
+target_compile_definitions(SPTAGLibStatic PRIVATE ${Definition})
+
+# 👇 NOTE
+# add_dependencies(SPTAGLibStatic SPTAGLib)
+
 if(${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU")
     target_compile_options(SPTAGLibStatic PRIVATE -fPIC)
 endif()

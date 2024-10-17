@@ -3,7 +3,7 @@
 
 #include "inc/Core/SPANN/Index.h"
 #include "inc/Helper/VectorSetReaders/MemoryReader.h"
-#include "inc/Core/SPANN/ExtraFullGraphSearcher.h"
+#include "inc/Core/SPANN/ExtraFullGraphSearcher.cuh"
 #include <chrono>
 #include "inc/Core/ResultIterator.h"
 #include "inc/Core/SPANN/SPANNResultIterator.h"

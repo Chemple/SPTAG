@@ -22,7 +22,7 @@
 #include "inc/Helper/VectorSetReader.h"
 #include "inc/Core/Common/IQuantizer.h"
 
-#include "IExtraSearcher.h"
+#include "IExtraSearcher.cuh"
 #include "Options.h"
 
 #include <functional>

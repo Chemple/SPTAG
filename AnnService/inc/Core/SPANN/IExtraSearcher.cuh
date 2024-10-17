@@ -1,13 +1,15 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
-#ifndef _SPTAG_SPANN_IEXTRASEARCHER_H_
-#define _SPTAG_SPANN_IEXTRASEARCHER_H_
+#ifndef _SPTAG_SPANN_IEXTRASEARCHER_CUH_
+#define _SPTAG_SPANN_IEXTRASEARCHER_CUH_
 
 #include "Options.h"
 
 #include "inc/Core/VectorIndex.h"
 #include "inc/Helper/AsyncFileReader.h"
+
+#include <cuda_runtime.h>
 
 #include <memory>
 #include <vector>
@@ -233,4 +235,4 @@ namespace SPTAG {
     } // SPANN
 } // SPTAG
 
-#endif // _SPTAG_SPANN_IEXTRASEARCHER_H_
+#endif // _SPTAG_SPANN_IEXTRASEARCHER_CUH_
