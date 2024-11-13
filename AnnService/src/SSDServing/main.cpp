@@ -6,6 +6,7 @@
 #include "inc/Core/Common.h"
 #include "inc/Core/VectorIndex.h"
 #include "inc/Core/SPANN/Index.h"
+#include "inc/Core/SPANN/GPU/GpuIndex.cuh"
 #include "inc/Helper/SimpleIniReader.h"
 #include "inc/Helper/VectorSetReader.h"
 #include "inc/Helper/StringConvert.h"
@@ -13,6 +14,7 @@
 
 #include "inc/SSDServing/main.h"
 #include "inc/SSDServing/Utils.h"
+#include "inc/SSDServing/GPU/GpuSSDIndex.cuh"
 #include "inc/SSDServing/SSDIndex.h"
  
 using namespace SPTAG;
@@ -85,7 +87,8 @@ namespace SPTAG {
 
 			SPTAGLIB_LOG(Helper::LogLevel::LL_Info, "Set QuantizerFile = %s\n", QuantizerFilePath.c_str());
 
-			std::shared_ptr<VectorIndex> index = VectorIndex::CreateInstance(IndexAlgoType::SPANN, valueType);
+			std::shared_ptr<VectorIndex> index = VectorIndex::CreateInstance(IndexAlgoType::GpuSPANN, valueType);
+			// std::shared_ptr<VectorIndex> index = VectorIndex::CreateInstance(IndexAlgoType::SPANN, valueType);
 			if (!QuantizerFilePath.empty() && index->LoadQuantizer(QuantizerFilePath) != ErrorCode::Success)
 			{
 				exit(1);
@@ -167,7 +170,7 @@ namespace SPTAG {
 			if (searchSSD) {
 #define DefineVectorValueType(Name, Type) \
 	if (opts->m_valueType == VectorValueType::Name) { \
-        SSDIndex::Search((SPANN::Index<Type>*)(index.get())); \
+        GpuSSDIndex::Search((GpuSPANN::GpuIndex<Type>*)(index.get())); \
 	} \
 
 #include "inc/Core/DefinitionList.h"

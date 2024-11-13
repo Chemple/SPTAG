@@ -4,16 +4,19 @@
 #ifndef _SPTAG_SPANN_EXTRASEARCHER_H_
 #define _SPTAG_SPANN_EXTRASEARCHER_H_
 
+#include "inc/Core/Common.h"
+#include "inc/Core/Common/SIMDUtils.h"
 #include "inc/Helper/VectorSetReader.h"
 #include "inc/Helper/AsyncFileReader.h"
-#include "IExtraSearcher.cuh"
+#include "IExtraSearcher.h"
 #include "inc/Core/Common/TruthSet.h"
 #include "Compressor.h"
+#include "inc/Helper/Logging.h"
 
+#include <cassert>
 #include <map>
 #include <cmath>
 #include <climits>
-#include <future>
 #include <numeric>
 
 namespace SPTAG
@@ -264,6 +267,9 @@ namespace SPTAG
                     request.m_readSize = totalBytes;
                     request.m_buffer = buffer;
                     request.m_status = (fileid << 16) | p_exWorkSpace->m_spaceID;
+#ifdef DEBUG
+                    SPTAGLIB_LOG(Helper::LogLevel::LL_Debug, "the m_status is %d\n",request.m_status);
+#endif
                     request.m_payload = (void*)listInfo; 
                     request.m_success = false;
 
@@ -280,7 +286,15 @@ namespace SPTAG
                             DecompressPosting();
                         }
 
-                        ProcessPosting();
+                        for (int i = 0; i < listInfo->listEleCount; i++) {
+                            uint64_t offsetVectorID, offsetVector;
+                            (this->*m_parsePosting)(offsetVectorID, offsetVector, i, listInfo->listEleCount);
+                            int vectorID = *(reinterpret_cast<int*>(p_postingListFullData + offsetVectorID));
+                            if (p_exWorkSpace->m_deduper.CheckAndSet(vectorID)) continue;
+                            (this->*m_parseEncoding)(p_index, listInfo, (ValueType*)(p_postingListFullData + offsetVector));
+                            auto distance2leaf = p_index->ComputeDistance(queryResults.GetQuantizedTarget(), p_postingListFullData + offsetVector);
+                            queryResults.AddPoint(vectorID, distance2leaf);
+                        }
                     };
 #else // async read
                     request.m_callback = [&p_exWorkSpace, &request](bool success)
@@ -314,7 +328,176 @@ namespace SPTAG
 
 #ifdef ASYNC_READ
 #ifdef BATCH_READ
-                BatchReadFileAsync(m_indexFiles, (p_exWorkSpace->m_diskRequests).data(), postingListCount);
+                assert(m_indexFiles.size() == 1);
+                // BatchReadFileAsync(m_indexFiles, (p_exWorkSpace->m_diskRequests).data(), postingListCount);
+                BatchReadFileAsync(m_indexFiles[0], (p_exWorkSpace->m_diskRequests).data(), postingListCount);
+#else
+                while (unprocessed > 0)
+                {
+                    Helper::AsyncReadRequest* request;
+                    if (!(p_exWorkSpace->m_processIocp.pop(request))) break;
+
+                    --unprocessed;
+                    char* buffer = request->m_buffer;
+                    ListInfo* listInfo = static_cast<ListInfo*>(request->m_payload);
+                    // decompress posting list
+                    char* p_postingListFullData = buffer + listInfo->pageOffset;
+                    if (m_enableDataCompression)
+                    {
+                        DecompressPosting();
+                    }
+
+                    ProcessPosting();
+                }
+#endif
+#endif
+                if (truth) {
+                    for (uint32_t pi = 0; pi < postingListCount; ++pi)
+                    {
+                        auto curPostingID = p_exWorkSpace->m_postingIDs[pi];
+
+                        ListInfo* listInfo = &(m_listInfos[curPostingID]);
+                        char* buffer = (char*)((p_exWorkSpace->m_pageBuffers[pi]).GetBuffer());
+
+                        char* p_postingListFullData = buffer + listInfo->pageOffset;
+                        if (m_enableDataCompression)
+                        {
+                            p_postingListFullData = (char*)p_exWorkSpace->m_decompressBuffer.GetBuffer();
+                            if (listInfo->listEleCount != 0)
+                            {
+                                try {
+                                    m_pCompressor->Decompress(buffer + listInfo->pageOffset, listInfo->listTotalBytes, p_postingListFullData, listInfo->listEleCount * m_vectorInfoSize, m_enableDictTraining);
+                                }
+                                catch (std::runtime_error& err) {
+                                    SPTAGLIB_LOG(Helper::LogLevel::LL_Error, "Decompress postingList %d  failed! %s, \n", curPostingID, err.what());
+                                    continue;
+                                }
+                            }
+                        }
+
+                        for (size_t i = 0; i < listInfo->listEleCount; ++i) {
+                            uint64_t offsetVectorID = m_enablePostingListRearrange ? (m_vectorInfoSize - sizeof(int)) * listInfo->listEleCount + sizeof(int) * i : m_vectorInfoSize * i; \
+                            int vectorID = *(reinterpret_cast<int*>(p_postingListFullData + offsetVectorID)); \
+                            if (truth && truth->count(vectorID)) (*found)[curPostingID].insert(vectorID);
+                        }
+                    }
+                }
+
+                if (p_stats) 
+                {
+                    p_stats->m_totalListElementsCount = listElements;
+                    p_stats->m_diskIOCount = diskIO;
+                    p_stats->m_diskAccessCount = diskRead;
+                }
+            }
+
+             virtual void SearchIndex_DEBUG(ExtraWorkSpace* p_exWorkSpace,
+                QueryResult& p_queryResults,
+                std::shared_ptr<VectorIndex> p_index,
+                SearchStats* p_stats,
+                std::set<int>* truth, std::map<int, std::set<int>>* found)
+            {
+                const uint32_t postingListCount = static_cast<uint32_t>(p_exWorkSpace->m_postingIDs.size());
+
+                COMMON::QueryResultSet<ValueType>& queryResults = *((COMMON::QueryResultSet<ValueType>*)&p_queryResults);
+ 
+                int diskRead = 0;
+                int diskIO = 0;
+                int listElements = 0;
+
+#if defined(ASYNC_READ) && !defined(BATCH_READ)
+                int unprocessed = 0;
+#endif
+
+                for (uint32_t pi = 0; pi < postingListCount; ++pi)
+                {
+                    auto curPostingID = p_exWorkSpace->m_postingIDs[pi];
+                    // auto curPostingID = 7;
+                    ListInfo* listInfo = &(m_listInfos[curPostingID]);
+                    int fileid = m_oneContext? 0: curPostingID / m_listPerFile;
+
+#ifndef BATCH_READ
+                    Helper::DiskIO* indexFile = m_indexFiles[fileid].get();
+#endif
+
+                    diskRead += listInfo->listPageCount;
+                    diskIO += 1;
+                    listElements += listInfo->listEleCount;
+
+                    size_t totalBytes = (static_cast<size_t>(listInfo->listPageCount) << PageSizeEx);
+                    char* buffer = (char*)((p_exWorkSpace->m_pageBuffers[pi]).GetBuffer());
+
+#ifdef ASYNC_READ       
+                    auto& request = p_exWorkSpace->m_diskRequests[pi];
+                    request.m_offset = listInfo->listOffset;
+                    request.m_readSize = totalBytes;
+                    request.m_buffer = buffer;
+                    request.m_status = (fileid << 16) | p_exWorkSpace->m_spaceID;
+#ifdef DEBUG
+                    SPTAGLIB_LOG(Helper::LogLevel::LL_Debug, "the m_status is %d\n",request.m_status);
+#endif
+                    request.m_payload = (void*)listInfo; 
+                    request.m_success = false;
+
+#ifdef BATCH_READ // async batch read
+                    request.m_callback = [&p_exWorkSpace, &queryResults, &p_index, &request, this](bool success)
+                    {
+                        char* buffer = request.m_buffer;
+                        ListInfo* listInfo = (ListInfo*)(request.m_payload);
+
+                        // decompress posting list
+                        char* p_postingListFullData = buffer + listInfo->pageOffset;
+                        if (m_enableDataCompression)
+                        {
+                            DecompressPosting();
+                        }
+
+                        for (int i = 0; i < listInfo->listEleCount; i++) {
+                            uint64_t offsetVectorID, offsetVector;
+                            (this->*m_parsePosting)(offsetVectorID, offsetVector, i, listInfo->listEleCount);
+                            int vectorID = *(reinterpret_cast<int*>(p_postingListFullData + offsetVectorID));
+                            SPTAGLIB_LOG(Helper::LogLevel::LL_Info, "the vector id is %d\n",vectorID);
+                            if (p_exWorkSpace->m_deduper.CheckAndSet(vectorID)) continue;
+                            (this->*m_parseEncoding)(p_index, listInfo, (ValueType*)(p_postingListFullData + offsetVector));
+                            auto distance2leaf = p_index->ComputeDistance(queryResults.GetQuantizedTarget(), p_postingListFullData + offsetVector);
+                            queryResults.AddPoint(vectorID, distance2leaf);
+                        }
+                    };
+#else // async read
+                    request.m_callback = [&p_exWorkSpace, &request](bool success)
+                    {
+                        p_exWorkSpace->m_processIocp.push(&request);
+                    };
+
+                    ++unprocessed;
+                    if (!(indexFile->ReadFileAsync(request)))
+                    {
+                        SPTAGLIB_LOG(Helper::LogLevel::LL_Error, "Failed to read file!\n");
+                        unprocessed--;
+                    }
+#endif
+#else // sync read
+                    auto numRead = indexFile->ReadBinary(totalBytes, buffer, listInfo->listOffset);
+                    if (numRead != totalBytes) {
+                        SPTAGLIB_LOG(Helper::LogLevel::LL_Error, "File %s read bytes, expected: %zu, acutal: %llu.\n", m_extraFullGraphFile.c_str(), totalBytes, numRead);
+                        throw std::runtime_error("File read mismatch");
+                    }
+                    // decompress posting list
+                    char* p_postingListFullData = buffer + listInfo->pageOffset;
+                    if (m_enableDataCompression)
+                    {
+                        DecompressPosting();
+                    }
+
+                    ProcessPosting();
+#endif
+                }
+
+#ifdef ASYNC_READ
+#ifdef BATCH_READ
+                assert(m_indexFiles.size() == 1);
+                // BatchReadFileAsync(m_indexFiles, (p_exWorkSpace->m_diskRequests).data(), postingListCount);
+                BatchReadFileAsync(m_indexFiles[0], (p_exWorkSpace->m_diskRequests).data(), postingListCount);
 #else
                 while (unprocessed > 0)
                 {
@@ -1572,6 +1755,7 @@ namespace SPTAG
             std::string m_extraFullGraphFile;
 
             std::vector<ListInfo> m_listInfos;
+            // NOTE(shiwen): what is the meaning? always true in ssdserving.?
             bool m_oneContext;
 
             std::vector<std::shared_ptr<Helper::DiskIO>> m_indexFiles;

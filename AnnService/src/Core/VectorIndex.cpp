@@ -10,6 +10,8 @@
 #include "inc/Core/BKT/Index.h"
 #include "inc/Core/KDT/Index.h"
 #include "inc/Core/SPANN/Index.h"
+#include "inc/Core/SPANN/GPU/GpuIndex.cuh"
+// #include "inc/Core/SPANN/GPU/IndexDebug.h"
 
 typedef typename SPTAG::Helper::Concurrent::ConcurrentMap<std::string, SPTAG::SizeType> MetadataMap;
 
@@ -610,6 +612,32 @@ VectorIndex::CreateInstance(IndexAlgoType p_algo, VectorValueType p_valuetype)
         default: break;
         }
     }
+    else if (p_algo == IndexAlgoType::GpuSPANN) {
+        switch (p_valuetype)
+        {
+#define DefineVectorValueType(Name, Type) \
+    case VectorValueType::Name: \
+        return std::shared_ptr<VectorIndex>(new GpuSPANN::GpuIndex<Type>); \
+
+#include "inc/Core/DefinitionList.h"
+#undef DefineVectorValueType
+
+        default: break;
+        }
+    }
+//     else if (p_algo == IndexAlgoType::DebugSPANN) {
+//         switch (p_valuetype)
+//         {
+// #define DefineVectorValueType(Name, Type) \
+//     case VectorValueType::Name: \
+//         return std::shared_ptr<VectorIndex>(new SPANN::IndexDebug<Type>); \
+
+// #include "inc/Core/DefinitionList.h"
+// #undef DefineVectorValueType
+
+//         default: break;
+//         }
+//     }
     return nullptr;
 }
 

@@ -1,9 +1,10 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
+#include "inc/Core/SPANN/IExtraSearcher.h"
 #include "inc/Core/SPANN/Index.h"
 #include "inc/Helper/VectorSetReaders/MemoryReader.h"
-#include "inc/Core/SPANN/ExtraFullGraphSearcher.cuh"
+#include "inc/Core/SPANN/ExtraFullGraphSearcher.h"
 #include <chrono>
 #include "inc/Core/ResultIterator.h"
 #include "inc/Core/SPANN/SPANNResultIterator.h"
@@ -12,7 +13,8 @@
 #pragma warning(disable:4127)  // conditional expression is constant
 
 namespace SPTAG
-{
+{   
+    // NOTE(shiwen): fuck this.
     template <typename T>
     thread_local std::unique_ptr<T> COMMON::ThreadLocalWorkSpaceFactory<T>::m_workspace;
     namespace SPANN
@@ -358,6 +360,66 @@ namespace SPTAG
             return ErrorCode::Fail;
         }
 
+//         template <typename T>
+//         ErrorCode Index<T>::SearchDiskIndexGPU(QueryResult& p_query, SearchStats* p_stats) const
+//         {
+//             if (nullptr == m_extraSearcher) return ErrorCode::EmptyIndex;
+
+//             COMMON::QueryResultSet<T>* p_queryResults = (COMMON::QueryResultSet<T>*) & p_query;
+
+//             auto workSpace = m_workSpaceFactory->GetWorkSpace();
+//             if (!workSpace) {
+//                 // workSpace.reset(new ExtraWorkSpace<HostMemoryPolicy>());
+//                 // workSpace.reset(new ExtraWorkSpace<GpuMemoryPolicy>());
+// #ifdef DEBUG
+//                 workSpace->Initialize_DEBUG(m_options.m_maxCheck, m_options.m_hashExp, m_options.m_searchInternalResultNum, max(m_options.m_postingPageLimit, m_options.m_searchPostingPageLimit + 1) << PageSizeEx, m_options.m_enableDataCompression);
+// #else
+//                 workSpace->Initialize(m_options.m_maxCheck, m_options.m_hashExp, m_options.m_searchInternalResultNum, max(m_options.m_postingPageLimit, m_options.m_searchPostingPageLimit + 1) << PageSizeEx, m_options.m_enableDataCompression);
+// #endif
+//             }
+//             else {
+//                 workSpace->Clear(m_options.m_searchInternalResultNum, max(m_options.m_postingPageLimit, m_options.m_searchPostingPageLimit + 1) << PageSizeEx, m_options.m_enableDataCompression);
+//             }
+//             workSpace->m_deduper.clear();
+//             workSpace->m_postingIDs.clear();
+
+//             float limitDist = p_queryResults->GetResult(0)->Dist * m_options.m_maxDistRatio;
+//             int i = 0;
+//             for (; i < m_options.m_searchInternalResultNum; ++i)
+//             {
+//                 auto res = p_queryResults->GetResult(i);
+//                 if (res->VID == -1 || (limitDist > 0.1 && res->Dist > limitDist)) break;
+//                 if (m_extraSearcher->CheckValidPosting(res->VID)) 
+//                 {
+//                     workSpace->m_postingIDs.emplace_back(res->VID);
+//                 }
+//                 res->VID = static_cast<SizeType>((m_vectorTranslateMap.get())[res->VID]);
+//                 if (res->VID == MaxSize) 
+//                 {
+//                     res->VID = -1;
+//                     res->Dist = MaxDist;
+//                 }
+//             }
+
+//             for (; i < p_queryResults->GetResultNum(); ++i)
+//             {
+//                 auto res = p_queryResults->GetResult(i);
+//                 if (res->VID == -1) break;
+//                 res->VID = static_cast<SizeType>((m_vectorTranslateMap.get())[res->VID]);
+//                 if (res->VID == MaxSize) 
+//                 {
+//                     res->VID = -1;
+//                     res->Dist = MaxDist;
+//                 }
+//             }
+
+//             p_queryResults->Reverse();
+//             m_extraSearcher->SearchIndexGPU(workSpace.get(), *p_queryResults, m_index, p_stats);
+//             m_workSpaceFactory->ReturnWorkSpace(std::move(workSpace));
+//             p_queryResults->SortResult();
+//             return ErrorCode::Success;
+//         }
+
         template <typename T>
         ErrorCode Index<T>::SearchDiskIndex(QueryResult& p_query, SearchStats* p_stats) const
         {
@@ -368,7 +430,11 @@ namespace SPTAG
             auto workSpace = m_workSpaceFactory->GetWorkSpace();
             if (!workSpace) {
                 workSpace.reset(new ExtraWorkSpace());
+#ifdef DEBUG
+                workSpace->Initialize_DEBUG(m_options.m_maxCheck, m_options.m_hashExp, m_options.m_searchInternalResultNum, max(m_options.m_postingPageLimit, m_options.m_searchPostingPageLimit + 1) << PageSizeEx, m_options.m_enableDataCompression);
+#else
                 workSpace->Initialize(m_options.m_maxCheck, m_options.m_hashExp, m_options.m_searchInternalResultNum, max(m_options.m_postingPageLimit, m_options.m_searchPostingPageLimit + 1) << PageSizeEx, m_options.m_enableDataCompression);
+#endif
             }
             else {
                 workSpace->Clear(m_options.m_searchInternalResultNum, max(m_options.m_postingPageLimit, m_options.m_searchPostingPageLimit + 1) << PageSizeEx, m_options.m_enableDataCompression);
@@ -407,7 +473,8 @@ namespace SPTAG
             }
 
             p_queryResults->Reverse();
-            m_extraSearcher->SearchIndex(workSpace.get(), *p_queryResults, m_index, p_stats);
+            // m_extraSearcher->SearchIndex(workSpace.get(), *p_queryResults, m_index, p_stats);
+            m_extraSearcher->SearchIndex_DEBUG(workSpace.get(), *p_queryResults, m_index, p_stats);
             m_workSpaceFactory->ReturnWorkSpace(std::move(workSpace));
             p_queryResults->SortResult();
             return ErrorCode::Success;

@@ -100,6 +100,15 @@ public:
         std::reverse(m_results.Data(), m_results.Data() + m_resultNum);
     }
 
+    void Debug(){
+      for (auto iter = begin(); iter!=end(); iter++) {
+        auto vid = iter->VID;
+        auto distance = iter->Dist;
+        printf("{%d, %f} ",vid,distance);
+      }
+      printf("\n");
+    }
+
 private:
     void Heapify(int count)
     {

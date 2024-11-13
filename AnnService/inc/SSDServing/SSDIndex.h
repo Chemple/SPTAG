@@ -7,7 +7,8 @@
 #include "inc/Core/Common/DistanceUtils.h"
 #include "inc/Core/Common/QueryResultSet.h"
 #include "inc/Core/SPANN/Index.h"
-#include "inc/Core/SPANN/ExtraFullGraphSearcher.cuh"
+// #include "inc/Core/SPANN/GPU/GpuIndex.cuh"
+#include "inc/Core/SPANN/ExtraFullGraphSearcher.h"
 #include "inc/Helper/VectorSetReader.h"
 #include "inc/Helper/StringConvert.h"
 #include "inc/SSDServing/Utils.h"
@@ -236,32 +237,32 @@ namespace SPTAG {
 
                 std::shared_ptr<VectorSet> vectorSet;
 
-                if (!p_opts.m_vectorPath.empty() && fileexists(p_opts.m_vectorPath.c_str())) {
-                    std::shared_ptr<Helper::ReaderOptions> vectorOptions(new Helper::ReaderOptions(p_opts.m_valueType, p_opts.m_dim, p_opts.m_vectorType, p_opts.m_vectorDelimiter));
-                    auto vectorReader = Helper::VectorSetReader::CreateInstance(vectorOptions);
-                    if (ErrorCode::Success == vectorReader->LoadFile(p_opts.m_vectorPath))
-                    {
-                        vectorSet = vectorReader->GetVectorSet();
-                        if (p_opts.m_distCalcMethod == DistCalcMethod::Cosine) vectorSet->Normalize(numThreads);
-                        SPTAGLIB_LOG(Helper::LogLevel::LL_Info, "\nLoad VectorSet(%d,%d).\n", vectorSet->Count(), vectorSet->Dimension());
-                    }
-                }
+                // if (!p_opts.m_vectorPath.empty() && fileexists(p_opts.m_vectorPath.c_str())) {
+                //     std::shared_ptr<Helper::ReaderOptions> vectorOptions(new Helper::ReaderOptions(p_opts.m_valueType, p_opts.m_dim, p_opts.m_vectorType, p_opts.m_vectorDelimiter));
+                //     auto vectorReader = Helper::VectorSetReader::CreateInstance(vectorOptions);
+                //     if (ErrorCode::Success == vectorReader->LoadFile(p_opts.m_vectorPath))
+                //     {
+                //         vectorSet = vectorReader->GetVectorSet();
+                //         if (p_opts.m_distCalcMethod == DistCalcMethod::Cosine) vectorSet->Normalize(numThreads);
+                //         SPTAGLIB_LOG(Helper::LogLevel::LL_Info, "\nLoad VectorSet(%d,%d).\n", vectorSet->Count(), vectorSet->Dimension());
+                //     }
+                // }
 
-                if (p_opts.m_rerank > 0 && vectorSet != nullptr) {
-                    SPTAGLIB_LOG(Helper::LogLevel::LL_Info, "\n Begin rerank...\n");
-                    for (int i = 0; i < results.size(); i++)
-                    {
-                        for (int j = 0; j < K; j++)
-                        {
-                            if (results[i].GetResult(j)->VID < 0) continue;
-                            results[i].GetResult(j)->Dist = COMMON::DistanceUtils::ComputeDistance((const ValueType*)querySet->GetVector(i),
-                                (const ValueType*)vectorSet->GetVector(results[i].GetResult(j)->VID), querySet->Dimension(), p_opts.m_distCalcMethod);
-                        }
-                        BasicResult* re = results[i].GetResults();
-                        std::sort(re, re + K, COMMON::Compare);
-                    }
-                    K = p_opts.m_rerank;
-                }
+                // if (p_opts.m_rerank > 0 && vectorSet != nullptr) {
+                //     SPTAGLIB_LOG(Helper::LogLevel::LL_Info, "\n Begin rerank...\n");
+                //     for (int i = 0; i < results.size(); i++)
+                //     {
+                //         for (int j = 0; j < K; j++)
+                //         {
+                //             if (results[i].GetResult(j)->VID < 0) continue;
+                //             results[i].GetResult(j)->Dist = COMMON::DistanceUtils::ComputeDistance((const ValueType*)querySet->GetVector(i),
+                //                 (const ValueType*)vectorSet->GetVector(results[i].GetResult(j)->VID), querySet->Dimension(), p_opts.m_distCalcMethod);
+                //         }
+                //         BasicResult* re = results[i].GetResults();
+                //         std::sort(re, re + K, COMMON::Compare);
+                //     }
+                //     K = p_opts.m_rerank;
+                // }
 
                 float recall = 0, MRR = 0;
                 std::vector<std::set<SizeType>> truth;

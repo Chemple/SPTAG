@@ -92,6 +92,8 @@ DefineErrorCode(Socket_FailedConnectToEndPoint, 0x4001)
 DefineIndexAlgo(BKT)
 DefineIndexAlgo(KDT)
 DefineIndexAlgo(SPANN)
+DefineIndexAlgo(GpuSPANN)
+DefineIndexAlgo(DebugSPANN)
 
 #endif // DefineIndexAlgo
 

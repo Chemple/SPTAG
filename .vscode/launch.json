@@ -10,7 +10,8 @@
       "name": "Launch",
       "program": "/home/shiwen/project/test_SPTAG/SPTAG/Debug/ssdserving",
       "args": [
-        "/home/shiwen/project/test_SPTAG/SPTAG/configs/test_config_ssdserving.ini"
+        // "/home/shiwen/project/test_SPTAG/SPTAG/configs/test_config_ssdserving.ini"
+        "/home/shiwen/project/test_SPTAG/SPTAG/configs/test_big_index.ini"
       ],
       "cwd": "${workspaceFolder}"
     }

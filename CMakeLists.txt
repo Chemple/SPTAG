@@ -3,6 +3,10 @@
 
 cmake_minimum_required (VERSION 3.12)
 
+set(CMAKE_CUDA_COMPILER /usr/local/cuda-12.6/bin/nvcc)
+set(CMAKE_CUDA_HOST_COMPILER /usr/bin/g++-11)
+set(CMAKE_CXX_COMPILER /usr/bin/g++-11)
+
 project (SPTAGLib)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
@@ -123,6 +127,6 @@ option(LIBRARYONLY "LIBRARYONLY" OFF)
 add_subdirectory (ThirdParty/zstd/build/cmake)
 
 add_subdirectory (AnnService)
-add_subdirectory (Test)
+# add_subdirectory (Test)
 # add_subdirectory (GPUSupport)
-add_subdirectory (Wrappers)
+# add_subdirectory (Wrappers)

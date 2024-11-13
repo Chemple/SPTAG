@@ -22,7 +22,7 @@
 #include "inc/Helper/VectorSetReader.h"
 #include "inc/Core/Common/IQuantizer.h"
 
-#include "IExtraSearcher.cuh"
+#include "IExtraSearcher.h"
 #include "Options.h"
 
 #include <functional>
@@ -56,6 +56,7 @@ namespace SPTAG
 
             std::function<float(const T*, const T*, DimensionType)> m_fComputeDistance;
             int m_iBaseSquare;
+            // NOTE(shiwen): initialized by m_workSpaceFactory = std::make_unique<SPTAG::COMMON::ThreadLocalWorkSpaceFactory<ExtraWorkSpace<HostMemoryPolicy>>>();
             std::unique_ptr<SPTAG::COMMON::IWorkSpaceFactory<ExtraWorkSpace>> m_workSpaceFactory;
 
         public:
@@ -140,6 +141,7 @@ namespace SPTAG
             ErrorCode SearchIndexWithFilter(QueryResult& p_query, std::function<bool(const ByteArray&)> filterFunc, int maxCheck = 0, bool p_searchDeleted = false) const;
 
             ErrorCode SearchDiskIndex(QueryResult& p_query, SearchStats* p_stats = nullptr) const;
+            // ErrorCode SearchDiskIndexGPU(QueryResult& p_query, SearchStats* p_stats = nullptr) const;
 	        bool SearchDiskIndexIterative(QueryResult& p_headQuery, QueryResult& p_query, ExtraWorkSpace* extraWorkspace) const;
             ErrorCode DebugSearchDiskIndex(QueryResult& p_query, int p_subInternalResultNum, int p_internalResultNum,
                 SearchStats* p_stats = nullptr, std::set<int>* truth = nullptr, std::map<int, std::set<int>>* found = nullptr) const;

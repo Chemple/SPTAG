@@ -4,9 +4,11 @@
 #ifndef _SPTAG_HELPER_DISKIO_H_
 #define _SPTAG_HELPER_DISKIO_H_
 
+#include <fcntl.h>
 #include <functional>
 #include <cstdint>
 #include <fstream>
+#include <iostream>
 #include <string.h>
 #include <memory>
 

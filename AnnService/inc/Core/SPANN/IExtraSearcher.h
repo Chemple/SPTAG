@@ -1,17 +1,23 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
-#ifndef _SPTAG_SPANN_IEXTRASEARCHER_CUH_
-#define _SPTAG_SPANN_IEXTRASEARCHER_CUH_
+#ifndef _SPTAG_SPANN_IEXTRASEARCHER_H_
+#define _SPTAG_SPANN_IEXTRASEARCHER_H_
 
-#include "Options.h"
+#include "inc/Core/SPANN/Options.h"
 
+#include "inc/Core/Common.h"
 #include "inc/Core/VectorIndex.h"
 #include "inc/Helper/AsyncFileReader.h"
+#include "inc/Helper/Logging.h"
+#include "inc/Helper/VectorSetReader.h"
 
-#include <cuda_runtime.h>
+#include <cassert>
+#include <cstddef>
+#include <cstdio>
 
 #include <memory>
+#include <type_traits>
 #include <vector>
 #include <chrono>
 #include <atomic>
@@ -69,6 +75,22 @@ namespace SPTAG {
             int m_threadID;
         };
 
+
+        // template<typename T>
+        // struct HostMemoryPolicy
+        // {
+        //     static T* Allocate(std::size_t size)
+        //     {
+        //         return static_cast<T*>(PAGE_ALLOC(sizeof(T) * size));
+        //     }
+
+        //     static void Deallocate(T* ptr)
+        //     {
+        //         std::free(ptr);
+        //     }
+        // };
+
+        // template<typename T, template<typename>class MemoryPolicy = HostMemoryPolicy>
         template<typename T>
         class PageBuffer
         {
@@ -83,7 +105,8 @@ namespace SPTAG {
                 if (m_pageBufferSize < p_size)
                 {
                     m_pageBufferSize = p_size;
-                    m_pageBuffer.reset(static_cast<T*>(PAGE_ALLOC(sizeof(T) * m_pageBufferSize)), [=](T* ptr) { PAGE_FREE(ptr); });
+                    T* ptr = static_cast<T*>(PAGE_ALLOC(sizeof(T) * p_size));
+                    m_pageBuffer.reset(ptr, [](T *p){std::free(p);});
                 }
             }
 
@@ -103,6 +126,8 @@ namespace SPTAG {
             std::size_t m_pageBufferSize;
         };
 
+        
+        // template<template<typename>class MemoryPolicy>
         struct ExtraWorkSpace : public SPTAG::COMMON::IWorkSpace
         {
             ExtraWorkSpace() {}
@@ -133,6 +158,10 @@ namespace SPTAG {
                 m_relaxedMono = false;
             }
 
+            void Initialize_DEBUG(int p_maxCheck, int p_hashExp, int p_internalResultNum, int p_maxPages, bool enableDataCompression) {
+                Initialize(p_maxCheck, p_hashExp, 32, 16*4096, enableDataCompression);
+            }
+
             void Initialize(va_list& arg) {
                 int maxCheck = va_arg(arg, int);
                 int hashExp = va_arg(arg, int);
@@ -144,6 +173,9 @@ namespace SPTAG {
 
             void Clear(int p_internalResultNum, int p_maxPages, bool enableDataCompression) {
                 if (p_internalResultNum > m_pageBuffers.size()) {
+#ifdef DEBUG
+                    assert(false);
+#endif
                     m_postingIDs.reserve(p_internalResultNum);
                     m_processIocp.reset(p_internalResultNum);
                     m_pageBuffers.resize(p_internalResultNum);
@@ -155,11 +187,17 @@ namespace SPTAG {
                         m_diskRequests[pi].m_extension = m_processIocp.handle();
                     }
                 } else if (p_maxPages > m_pageBuffers[0].GetPageSize()) {
+#ifdef DEBUG
+                    assert(false);
+#endif
                     for (int pi = 0; pi < m_pageBuffers.size(); pi++) m_pageBuffers[pi].ReservePageBuffer(p_maxPages);
                 }
 
                 m_enableDataCompression = enableDataCompression;
                 if (enableDataCompression) {
+#ifdef DEBUG
+                    assert(false);
+#endif
                     m_decompressBuffer.ReservePageBuffer(p_maxPages);
                 }
             }
@@ -214,6 +252,12 @@ namespace SPTAG {
                 std::set<int>* truth = nullptr,
                 std::map<int, std::set<int>>* found = nullptr) = 0;
 
+            virtual void SearchIndex_DEBUG(ExtraWorkSpace* p_exWorkSpace,
+                QueryResult& p_queryResults,
+                std::shared_ptr<VectorIndex> p_index,
+                SearchStats* p_stats,
+                std::set<int>* truth = nullptr,
+                std::map<int, std::set<int>>* found = nullptr) = 0;
             virtual bool SearchIterativeNext(ExtraWorkSpace* p_exWorkSpace,
                 QueryResult& p_queryResults,
                 std::shared_ptr<VectorIndex> p_index) = 0;
@@ -235,4 +279,4 @@ namespace SPTAG {
     } // SPANN
 } // SPTAG
 
-#endif // _SPTAG_SPANN_IEXTRASEARCHER_CUH_
+#endif // _SPTAG_SPANN_IEXTRASEARCHER_H_

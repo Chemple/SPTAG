@@ -2,6 +2,15 @@
 // Licensed under the MIT License.
 
 #include "inc/Helper/AsyncFileReader.h"
+#include "inc/Core/Common.h"
+#include "inc/Helper/DiskIO.h"
+#include "inc/Helper/Logging.h"
+// #include "inc/Helper/GPU/GpuRequest.cuh"
+
+#include <cassert>
+#include <cstdint>
+#include <linux/aio_abi.h>
+#include <vector>
 
 namespace SPTAG {
     namespace Helper {
@@ -115,6 +124,76 @@ namespace SPTAG {
             }
 
             for (int i = totalQueued; i < totalDone; i++) {
+                AsyncReadRequest* req = reinterpret_cast<AsyncReadRequest*>((events[i].data));
+                if (nullptr != req)
+                {
+                    req->m_callback(true);
+                }
+            }
+        }
+
+        void BatchReadFileAsync(std::shared_ptr<Helper::DiskIO>& diskio_handler, AsyncReadRequest* readRequests, int num)
+        {
+            std::vector<struct iocb> myiocbs(num);
+            std::vector<struct iocb*> myiocbptrs(num);
+            int channel = 0;
+
+            memset(myiocbs.data(), 0, num * sizeof(struct iocb));
+            for (int i = 0; i < num; i++) {
+                AsyncReadRequest* readRequest = &(readRequests[i]);
+
+                channel = readRequest->m_status & 0xffff;
+                int fileid = (readRequest->m_status >> 16);
+                assert(fileid == 0);
+
+                struct iocb* myiocb = &(myiocbs[i]);
+                myiocb->aio_data = reinterpret_cast<uintptr_t>(readRequest);
+                myiocb->aio_lio_opcode = IOCB_CMD_PREAD;
+                myiocb->aio_fildes = ((AsyncFileIO*)(diskio_handler.get()))->GetFileHandler();
+                myiocb->aio_buf = (std::uint64_t)(readRequest->m_buffer);
+                myiocb->aio_nbytes = readRequest->m_readSize;
+                myiocb->aio_offset = static_cast<std::int64_t>(readRequest->m_offset);
+
+                myiocbptrs[i] = myiocb;
+            }
+
+            const int totalToSubmit = num;
+            std::vector<struct io_event> events(totalToSubmit);
+            int done = 0, submitted = 0, queued = 0;
+            while (done < totalToSubmit) {
+                if (submitted < totalToSubmit) {
+                    if (submitted < num) {
+                        AsyncFileIO* handler = (AsyncFileIO*)(diskio_handler.get());
+                        int s = syscall(__NR_io_submit, handler->GetIOCP(channel), num - submitted, myiocbptrs.data() + submitted);
+                        if (s > 0) {
+                            submitted += s;
+                        }
+                        else {
+                            SPTAGLIB_LOG(Helper::LogLevel::LL_Error, "fid:%d channel %d, to submit:%d, submitted:%s\n", 0, channel, num - s, strerror(-s));
+                        }
+                    }
+                }
+
+                for (int i = queued; i < done; i++) {
+                    AsyncReadRequest* req = reinterpret_cast<AsyncReadRequest*>((events[i].data));
+                    if (nullptr != req)
+                    {
+                        req->m_callback(true);
+                    }
+                }
+                queued = done;
+
+                
+                if (done < submitted) {
+                    int wait = submitted - done;
+                    AsyncFileIO* handler = (AsyncFileIO*)(diskio_handler.get());
+                    auto d = syscall(__NR_io_getevents, handler->GetIOCP(channel), wait, wait, events.data() + done, &AIOTimeout);
+                    done += d;
+                }
+                
+            }
+
+            for (int i = queued; i < done; i++) {
                 AsyncReadRequest* req = reinterpret_cast<AsyncReadRequest*>((events[i].data));
                 if (nullptr != req)
                 {

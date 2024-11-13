@@ -1,8 +1,7 @@
 // Copyright (c) Microsoft Corporation. All rights reserved.
 // Licensed under the MIT License.
 
-#ifndef _SPTAG_HELPER_ASYNCFILEREADER_H_
-#define _SPTAG_HELPER_ASYNCFILEREADER_H_
+#pragma once
 
 #include "inc/Helper/DiskIO.h"
 #include "inc/Helper/ConcurrentSet.h"
@@ -646,7 +645,7 @@ namespace SPTAG
         };
 #endif
         void BatchReadFileAsync(std::vector<std::shared_ptr<Helper::DiskIO>>& handlers, AsyncReadRequest* readRequests, int num);
+        void BatchReadFileAsync(std::shared_ptr<Helper::DiskIO>& handlers, AsyncReadRequest* readRequests, int num);
+        // NOTE(shiwen): for GPU searching
     }
 }
-
-#endif // _SPTAG_HELPER_ASYNCFILEREADER_H_

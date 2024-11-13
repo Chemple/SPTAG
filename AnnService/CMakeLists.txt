@@ -1,7 +1,8 @@
 # Copyright (c) Microsoft Corporation. All rights reserved.
 # Licensed under the MIT License.
 
-find_package(CUDA)
+find_package(CUDA REQUIRED)
+enable_language(CUDA)
 
 message (STATUS "Found cuda.")
 message (STATUS "Include Path:" ${CUDA_INCLUDE_DIRS})
@@ -25,9 +26,18 @@ set(Zstd ${PROJECT_SOURCE_DIR}/ThirdParty/zstd)
 
 include_directories(${AnnService})
 include_directories(${Zstd}/lib)
+include_directories(${CUDA_INCLUDE_DIRS})
 
-file(GLOB_RECURSE HDR_FILES ${AnnService}/inc/Core/*.h ${AnnService}/inc/Core/*.cuh  ${AnnService}/inc/Helper/*.h)
-file(GLOB_RECURSE SRC_FILES ${AnnService}/src/Core/*.cpp ${AnnService}/src/Core/*.cu ${AnnService}/src/Helper/*.cpp)
+set(cuFileLib /usr/local/cuda-12.6/targets/x86_64-linux/lib/libcufile.so)
+
+# file(GLOB_RECURSE HDR_FILES ${AnnService}/inc/Core/*.h ${AnnService}/inc/Core/*.cuh ${AnnService}/inc/Helper/*.h ${AnnService}/inc/Helper/*.cuh)
+# file(GLOB_RECURSE SRC_FILES ${AnnService}/src/Core/*.cpp ${AnnService}/src/Core/*.cu ${AnnService}/src/Helper/*.cpp ${AnnService}/src/Helper/*.cu)
+file(GLOB_RECURSE HDR_FILES ${AnnService}/inc/Core/*.h ${AnnService}/inc/Helper/*.h)
+file(GLOB_RECURSE SRC_FILES ${AnnService}/src/Core/*.cpp ${AnnService}/src/Helper/*.cpp)
+
+message(STATUS "HDR_FILES is ${HDR_FILES}")
+
+message(STATUS "SRC_FILES is ${SRC_FILES}")
 
 list(REMOVE_ITEM HDR_FILES
     ${AnnService}/inc/Core/Common/DistanceUtils.h
@@ -42,14 +52,16 @@ list(REMOVE_ITEM SRC_FILES
     ${AnnService}/src/Core/Common/InstructionUtils.cpp
     )
 
+file(GLOB_RECURSE GPU_HDR_FILES ${AnnService}/inc/Core/*.cuh ${AnnService}/inc/Helper/*.cuh)
+file(GLOB_RECURSE GPU_SRC_FILES ${AnnService}/src/Helper/*.cu)
+
 set_source_files_properties(${GPU_SRC_FILES} PROPERTIES CUDA_SOURCE_PROPERTY_FORMAT OBJ)
+
 if (${CMAKE_BUILD_TYPE} STREQUAL "Debug")
     set(Definition -DGPUSPTAG -DDEBUG)
 else()
     set(Definition -DGPUSPTAG)
 endif()
-
-include_directories(${CUDA_INCLUDE_DIRS})
 
 add_library (DistanceUtils STATIC 
     inc/Core/Common/DistanceUtils.h
@@ -61,16 +73,24 @@ add_library (DistanceUtils STATIC
     src/Core/Common/InstructionUtils.cpp
     )
 
+
 if(${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU")
     target_compile_options(DistanceUtils PRIVATE -mavx2 -mavx -msse -msse2 -mavx512f -mavx512bw -mavx512dq -fPIC)
 endif()
 
+message(STATUS "GPU_HDR_FILES:${GPU_HDR_FILES}")
+message(STATUS "GPU_SRC_FILES:${GPU_SRC_FILES}")
+
+add_library(GPU_Lib SHARED ${GPU_HDR_FILES} ${GPU_SRC_FILES})
+target_link_libraries (GPU_Lib DistanceUtils libzstd_shared ${NUMA_LIBRARY} ${CUDA_LIBRARIES} ${cuFileLib})
+target_compile_definitions(GPU_Lib PRIVATE ${Definition})
+
 add_library (SPTAGLib SHARED ${SRC_FILES} ${HDR_FILES})
-target_link_libraries (SPTAGLib DistanceUtils libzstd_shared ${NUMA_LIBRARY} ${CUDA_LIBRARIES})
+target_link_libraries (SPTAGLib DistanceUtils libzstd_shared GPU_Lib ${NUMA_LIBRARY} ${CUDA_LIBRARIES} ${cuFileLib})
 target_compile_definitions(SPTAGLib PRIVATE ${Definition})
 
 add_library (SPTAGLibStatic STATIC ${SRC_FILES} ${HDR_FILES})
-target_link_libraries (SPTAGLibStatic DistanceUtils libzstd_static ${NUMA_LIBRARY_STATIC} ${CUDA_LIBRARIES})
+target_link_libraries (SPTAGLibStatic DistanceUtils libzstd_static GPU_Lib ${NUMA_LIBRARY_STATIC} ${CUDA_LIBRARIES} ${cuFileLib})
 target_compile_definitions(SPTAGLibStatic PRIVATE ${Definition})
 
 # 👇 NOTE
