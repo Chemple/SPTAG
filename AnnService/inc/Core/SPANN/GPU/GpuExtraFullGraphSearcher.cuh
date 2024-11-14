@@ -358,25 +358,6 @@ public:
     int unprocessed = 0;
 #endif
 
-    // cudaDeviceSynchronize();
-
-    // for (uint32_t pi = 0; pi < postingListCount; ++pi) {
-    //   auto stream = p_exWorkSpace->m_cudaStreamPool.GetStream(pi);
-    //   cudaStreamSynchronize(stream);
-    // }
-
-    count++;
-    printf("query count: %d", count);
-    if (count == 72) {
-      SPTAGLIB_LOG(Helper::LogLevel::LL_Debug, "mark\n");
-    }
-    if (count == 73) {
-      // Sleep(1000000);
-      assert(1);
-    }
-
-    // cudaDeviceSynchronize();
-
     for (uint32_t pi = 0; pi < postingListCount; ++pi) {
       // cudaStreamSynchronize(p_exWorkSpace->m_cudaStreamPool.GetStream(pi));
       auto curPostingID = p_exWorkSpace->m_postingIDs[pi];

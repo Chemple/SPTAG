@@ -350,13 +350,6 @@ void BatchReadFileAsync(
         &(readRequests[i].m_max_size), &(readRequests[i].m_offset),
         &(readRequests[i].m_buf_off), &(readRequests[i].m_read_bytes_done),
         readRequests[i].m_cuda_stream);
-    // cudaDeviceSynchronize();
-    // auto status = cuFileReadAsync(
-    //     gpu_diskio_handler->m_cufile_handle,
-    //     (unsigned char *)readRequests[i].m_dev_ptr,
-    //     &(readRequests[i].m_max_size), &(readRequests[i].m_offset),
-    //     &(readRequests[i].m_buf_off), &(readRequests[i].m_read_bytes_done),
-    //     nullptr);
     if (status.err != CU_FILE_SUCCESS) {
       SPTAGLIB_LOG(Helper::LogLevel::LL_Error, "cuFileReadAsync failed");
       exit(-1);
